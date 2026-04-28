@@ -165,20 +165,25 @@
   box(.05,.05,6,new THREE.MeshStandardMaterial({color:0x1133bb,metalness:.5}),4.3,.8,0);  
 
   /* --- DATA --- */  
-  let data={temperatura:22,umiditate_aer:55,umiditate_sol:70,led:0};  
-  const DS='/api/datasources/uid/efkdndew0bxtsc/resources/api/v2/query';  
+ let data={temperatura:22,umiditate_aer:55,umiditate_sol:70,led:0};  
+const INFLUX_URL='https://eu-central-1-1.aws.cloud2.influxdata.com';  
+const INFLUX_TOKEN='cNd6iVxyPWimXbZF2aJrqCDkpXIV4OUXtJMWge2eGwpgesKwKhlw46l7LViKch0_RoB74qtbtR8QWXY8ElOsxA==';  
+const INFLUX_ORG='aa5b3b6fd3a2e663';  
 
-  async function qFlux(field){  
-    const flux=`from(bucket:"arduino_digitaltwin")|>range(start:-5m)|>filter(fn:(r)=>r._measurement=="sera")|>filter(fn:(r)=>r._field=="${field}")|>last()`;  
-    const r=await fetch(DS,{method:'POST',headers:{'Content-Type':'application/vnd.flux','Accept':'application/csv'},body:flux});  
-    if(!r.ok)return null;  
-    const csv=await r.text();  
-    const rows=csv.split('\n').filter(l=>l&&!l.startsWith('#'));  
-    if(rows.length<2)return null;  
-    const h=rows[0].split(','), v=rows[rows.length-1].split(',');  
-    const i=h.indexOf('_value'); return i>=0?parseFloat(v[i]):null;  
-  }  
-
+async function qFlux(field){  
+  const flux=`from(bucket:"arduino_digitaltwin")|>range(start:-5m)|>filter(fn:(r)=>r._measurement=="sera")|>filter(fn:(r)=>r._field=="${field}")|>last()`;  
+  const r=await fetch(`${INFLUX_URL}/api/v2/query?org=${INFLUX_ORG}`,{  
+    method:'POST',  
+    headers:{'Authorization':`Token ${INFLUX_TOKEN}`,'Content-Type':'application/vnd.flux','Accept':'application/csv'},  
+    body:flux  
+  });  
+  if(!r.ok)return null;  
+  const csv=await r.text();  
+  const rows=csv.split('\n').filter(l=>l&&!l.startsWith('#'));  
+  if(rows.length<2)return null;  
+  const h=rows[0].split(','),v=rows[rows.length-1].split(',');  
+  const i=h.indexOf('_value'); return i>=0?parseFloat(v[i]):null;  
+}  
   async function fetchAll(){  
     document.getElementById('info').textContent='⟳ …';  
     try{  
