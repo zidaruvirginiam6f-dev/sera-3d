@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ro">
 <head>
   <meta charset="UTF-8">
@@ -278,9 +279,9 @@
     jg.position.set(0, 0.04, row); scene.add(jg);
   });
 
-  // Tub principal irigare pe perete
-  var tubMain = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 5.8),
-    new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }));
+  // Tub principal irigare pe perete — material salvat pentru colorare
+  const matTubIrigare = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+  var tubMain = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 5.8), matTubIrigare);
   tubMain.position.set(-2.75, 0.5, 0); scene.add(tubMain);
 
   // ─── BENZI LED TAVAN ───────────────────────────────────────
@@ -346,7 +347,7 @@
   screenLight.position.set(1.6, 2.05, -2.65); scene.add(screenLight);
 
   // Date pentru display
-  var dispData = { temperatura: null, umiditate_aer: null, umiditate_sol: null, led: null };
+  var dispData = { temperatura: null, umiditate_aer: null, umiditate_sol: null, led: null, pompa: null };
 
   function drawDisplay() {
     const W = 512, H = 320;
@@ -417,6 +418,22 @@
     dCtx.font = 'bold 18px monospace'; dCtx.textAlign = 'right';
     dCtx.fillText(d.led !== null ? (ledOn ? '● ON' : '○ OFF') : '---', W-18, 238);
 
+    // POMPĂ row
+    var pompaOn = d.pompa !== null && d.pompa > 0.5;
+    dCtx.fillStyle = pompaOn ? 'rgba(0,120,255,0.15)' : 'rgba(0,255,100,0.04)';
+    dCtx.fillRect(12, 253, W-24, 36);
+    if (pompaOn) {
+      dCtx.strokeStyle = 'rgba(0,140,255,0.5)';
+      dCtx.lineWidth = 1;
+      dCtx.strokeRect(12, 253, W-24, 36);
+    }
+    dCtx.fillStyle = 'rgba(140,210,155,0.65)';
+    dCtx.font = '12px monospace'; dCtx.textAlign = 'left';
+    dCtx.fillText('💧  POMPĂ', 22, 277);
+    dCtx.fillStyle = pompaOn ? '#44aaff' : '#445544';
+    dCtx.font = 'bold 18px monospace'; dCtx.textAlign = 'right';
+    dCtx.fillText(d.pompa !== null ? (pompaOn ? '● ON' : '○ OFF') : '---', W-18, 277);
+
     // Separator
     dCtx.strokeStyle = 'rgba(0,255,100,0.25)';
     dCtx.lineWidth = 1;
@@ -446,6 +463,8 @@
   const matGhiveci    = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 1.0 });
   const matPamant     = new THREE.MeshStandardMaterial({ color: 0x3d2b1a, roughness: 1.0 });
   const matArac       = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.9 });
+  // Material drip — comun pentru toate tuburile, colorat când pompa e ON
+  const matDrip = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
 
   function addLeaf(ox, oy, oz, rotY, rotZ) {
     var geo = new THREE.SphereGeometry(0.17, 6, 4);
@@ -473,8 +492,7 @@
     arac.position.set(px + 0.14, 0.8, pz); scene.add(arac);
 
     // Tub drip simplu
-    var dripTub = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, 0.35),
-      new THREE.MeshStandardMaterial({ color: 0x111111 }));
+    var dripTub = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, 0.35), matDrip);
     dripTub.position.set(px + 0.05, 0.07, pz > 0 ? pz - 0.17 : pz + 0.17);
     scene.add(dripTub);
 
@@ -570,7 +588,22 @@
     el.style.color = on ? '#ffe080' : '#b8ffcc';
   }
 
-  // ─── INFLUXDB ──────────────────────────────────────────────
+  // ─── UPDATE POMPĂ ──────────────────────────────────────────
+  function updatePompa(val) {
+    var on = val > 0.5;
+    // Colorăm toate tuburile de irigare: albastru aprins când e ON
+    var culoare = on ? 0x0088ff : 0x111111;
+    matDrip.color.set(culoare);
+    matTubIrigare.color.set(culoare);
+    // Emissive ușor albăstrui când e ON ca să se vadă clar
+    matDrip.emissive = new THREE.Color(on ? 0x003366 : 0x000000);
+    matTubIrigare.emissive = new THREE.Color(on ? 0x003366 : 0x000000);
+    // Corpul pompei pulsează și el
+    pompa.material.color.set(on ? 0x0055cc : 0x1a3a8a);
+    pompa.material.emissive = new THREE.Color(on ? 0x001133 : 0x000000);
+    // Display data
+    dispData.pompa = val;
+  }
   function parseInfluxCSV(csv) {
     var result = {};
     var lines = csv.split('\n');
@@ -605,6 +638,7 @@
       if (d.umiditate_aer !== undefined) { dispData.umiditate_aer = d.umiditate_aer; document.getElementById('umaer').textContent = d.umiditate_aer.toFixed(0)+'%'; }
       if (d.umiditate_sol !== undefined) { dispData.umiditate_sol = d.umiditate_sol; document.getElementById('umsol').textContent = d.umiditate_sol.toFixed(0)+'%'; }
       if (d.led           !== undefined) { dispData.led           = d.led;           updateLED(d.led); }
+      if (d.pompa         !== undefined) { updatePompa(d.pompa); }
       document.getElementById('status').textContent = 'actualizat ' + new Date().toLocaleTimeString('ro-RO');
     })
     .catch(function() {
@@ -633,5 +667,6 @@
   animate();
 
 </script>
+
 </body>
 </html>
