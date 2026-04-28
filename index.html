@@ -57,7 +57,7 @@
 
   // ─── CONFIG ────────────────────────────────────────────────  
   const INFLUX_URL  = 'https://eu-central-1-1.aws.cloud2.influxdata.com/api/v2/query?org=aa5b3b6fd3a2e663';  
-  const INFLUX_TOKEN = 'TOKEN_INFLUXDB'; // ← înlocuiește cu tokenul tău nou  
+  const INFLUX_TOKEN = 'cNd6iVxyPWimXbZF2aJrqCDkpXIV4OUXtJMWge2eGwpgesKwKhlw46l7LViKch0_RoB74qtbtR8QWXY8ElOsxA=='; // ← înlocuiește cu tokenul tău nou  
   const FLUX_QUERY  = `from(bucket:"arduino_digitaltwin")  
   |> range(start: -5m)  
   |> filter(fn:(r) => r._measurement == "sera")  
