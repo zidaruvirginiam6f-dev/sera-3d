@@ -1,265 +1,281 @@
-<!DOCTYPE html>  
-<html lang="ro">  
-<head>  
-  <meta charset="UTF-8">  
-  <title>Seră 3D — Digital Twin</title>  
-  <style>  
-    * { margin: 0; padding: 0; box-sizing: border-box; }  
-    body { background: #0a0f0a; overflow: hidden; font-family: monospace; }  
-    canvas { display: block; }  
-    #hud {  
-      position: absolute; top: 16px; left: 16px;  
-      display: flex; flex-direction: column; gap: 6px;  
-      pointer-events: none;  
-    }  
-    .hud-item {  
-      background: rgba(0,20,0,0.7);  
-      border: 1px solid rgba(0,255,80,0.3);  
-      border-radius: 6px; padding: 4px 10px;  
-      color: #a0ffb0; font-size: 13px;  
-      display: flex; align-items: center; gap: 6px;  
-    }  
-    #hint {  
-      position: absolute; bottom: 10px; left: 16px;  
-      color: rgba(100,200,120,0.5); font-size: 11px;  
-      pointer-events: none;  
-    }  
-    #status {  
-      position: absolute; bottom: 10px; right: 16px;  
-      color: rgba(100,200,120,0.5); font-size: 11px;  
-      pointer-events: none;  
-    }  
-  </style>  
-</head>  
-<body>  
+<!DOCTYPE html>
 
-<div id="hud">  
-  <div class="hud-item">🌡 <span id="temp">—°C</span></div>  
-  <div class="hud-item">💧 <span id="umaer">—%</span></div>  
-  <div class="hud-item">🌱 <span id="umsol">—%</span></div>  
-  <div class="hud-item">💡 <span id="led">—</span></div>  
-</div>  
-<div id="hint">⊙ drag = rotire · scroll = zoom</div>  
-<div id="status">initializare…</div>  
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <title>Seră 3D — Digital Twin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0f0a; overflow: hidden; font-family: monospace; }
+    canvas { display: block; }
+    #hud {
+      position: absolute; top: 16px; left: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+      pointer-events: none;
+    }
+    .hud-item {
+      background: rgba(0,20,0,0.7);
+      border: 1px solid rgba(0,255,80,0.3);
+      border-radius: 6px; padding: 4px 10px;
+      color: #a0ffb0; font-size: 13px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    #hint {
+      position: absolute; bottom: 10px; left: 16px;
+      color: rgba(100,200,120,0.5); font-size: 11px;
+      pointer-events: none;
+    }
+    #status {
+      position: absolute; bottom: 10px; right: 16px;
+      color: rgba(100,200,120,0.5); font-size: 11px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
 
-<script type="importmap">  
-{  
-  "imports": {  
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",  
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"  
-  }  
-}  
-</script>  
+<div id="hud">
+  <div class="hud-item">🌡 <span id="temp">—°C</span></div>
+  <div class="hud-item">💧 <span id="umaer">—%</span></div>
+  <div class="hud-item">🌱 <span id="umsol">—%</span></div>
+  <div class="hud-item">💡 <span id="led">—</span></div>
+</div>
+<div id="hint">⊙ drag = rotire · scroll = zoom</div>
+<div id="status">initializare…</div>
 
-<script type="module">  
-  import * as THREE from 'three';  
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';  
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 
-  // ─── CONFIG ────────────────────────────────────────────────  
-  const INFLUX_URL  = 'https://eu-central-1-1.aws.cloud2.influxdata.com/api/v2/query?org=aa5b3b6fd3a2e663';  
-  const INFLUX_TOKEN = 'cNd6iVxyPWimXbZF2aJrqCDkpXIV4OUXtJMWge2eGwpgesKwKhlw46l7LViKch0_RoB74qtbtR8QWXY8ElOsxA=='; // ← înlocuiește cu tokenul tău nou  
-  const FLUX_QUERY  = `from(bucket:"arduino_digitaltwin")  
-  |> range(start: -5m)  
-  |> filter(fn:(r) => r._measurement == "sera")  
-  |> last()`;  
-  const REFRESH_MS  = 5000;  
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-  // ─── SCENE ─────────────────────────────────────────────────  
-  const scene = new THREE.Scene();  
-  scene.background = new THREE.Color(0x0a0f0a);  
-  scene.fog = new THREE.Fog(0x0a0f0a, 20, 40);  
+  // ─── CONFIG ────────────────────────────────────────────────
+  const INFLUX_URL   = 'https://eu-central-1-1.aws.cloud2.influxdata.com/api/v2/query?org=aa5b3b6fd3a2e663';
+  const INFLUX_TOKEN = 'cNd6iVxyPWimXbZF2aJrqCDkpXIV4OUXtJMWge2eGwpgesKwKhlw46l7LViKch0_RoB74qtbtR8QWXY8ElOsxA==';
+  const FLUX_QUERY   = `from(bucket:"arduino_digitaltwin")
+  |> range(start: -5m)
+  |> filter(fn:(r) => r._measurement == "sera")
+  |> last()`;
+  const REFRESH_MS   = 5000;
 
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);  
-  camera.position.set(6, 5, 8);  
+  // ─── SCENE ─────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0f0a);
+  scene.fog = new THREE.Fog(0x0a0f0a, 20, 40);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });  
-  renderer.setSize(innerWidth, innerHeight);  
-  renderer.shadowMap.enabled = true;  
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;  
-  document.body.appendChild(renderer.domElement);  
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
+  camera.position.set(6, 5, 8);
 
-  const controls = new OrbitControls(camera, renderer.domElement);  
-  controls.enableDamping = true;  
-  controls.dampingFactor = 0.05;  
-  controls.minDistance = 3;  
-  controls.maxDistance = 20;  
-  controls.target.set(0, 1, 0);  
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
 
-  // ─── LUMINI PRINCIPALE (fixe, independente de LED) ─────────  
-  scene.add(new THREE.AmbientLight(0xffffff, 1.2));  
-  const sun = new THREE.DirectionalLight(0xffd090, 4.0);  
-  sun.position.set(5, 10, 7);  
-  sun.castShadow = true;  
-  sun.shadow.mapSize.set(1024, 1024);  
-  scene.add(sun);  
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.minDistance = 3;
+  controls.maxDistance = 20;
+  controls.target.set(0, 1, 0);
 
-  // ─── HELPER addBox ─────────────────────────────────────────  
-  function addBox(w, h, d, x, y, z, color, transp = false, opacity = 1) {  
-    const mat = new THREE.MeshStandardMaterial({  
-      color, transparent: transp, opacity,  
-      roughness: transp ? 0.05 : 0.8,  
-      metalness: transp ? 0.1 : 0.2,  
-      side: transp ? THREE.DoubleSide : THREE.FrontSide,  
-    });  
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);  
-    mesh.position.set(x, y, z);  
-    mesh.castShadow = !transp;  
-    mesh.receiveShadow = true;  
-    scene.add(mesh);  
-    return mesh;  
-  }  
+  // ─── LUMINI PRINCIPALE (fixe, independente de LED) ─────────
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  const sun = new THREE.DirectionalLight(0xffd090, 4.0);
+  sun.position.set(5, 10, 7);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene.add(sun);
 
-  // ─── SOL ───────────────────────────────────────────────────  
-  const sol = new THREE.Mesh(  
-    new THREE.PlaneGeometry(10, 10),  
-    new THREE.MeshStandardMaterial({ color: 0x2d4a1e })  
-  );  
-  sol.rotation.x = -Math.PI / 2;  
-  sol.receiveShadow = true;  
-  scene.add(sol);  
+  // Lumina de umplere din spate
+  const fillLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  fillLight.position.set(-5, 8, -5);
+  scene.add(fillLight);
 
-  // ─── STRUCTURĂ SERĂ ────────────────────────────────────────  
-  addBox(0.1, 3, 6, -3, 1.5,  0, 0x88ccff, true, 0.18); // perete stânga  
-  addBox(0.1, 3, 6,  3, 1.5,  0, 0x88ccff, true, 0.18); // perete dreapta  
-  addBox(6, 3, 0.1,  0, 1.5, -3, 0x88ccff, true, 0.18); // perete spate  
-  addBox(6, 3, 0.1,  0, 1.5,  3, 0x88ccff, true, 0.18); // perete față  
-  addBox(6, 0.12, 6, 0, 0,    0, 0x2d4a1e);              // podea  
+  // ─── HELPER addBox ─────────────────────────────────────────
+  function addBox(w, h, d, x, y, z, color, transp = false, opacity = 1) {
+    const mat = new THREE.MeshStandardMaterial({
+      color, transparent: transp, opacity,
+      roughness: transp ? 0.05 : 0.8,
+      metalness: transp ? 0.1 : 0.2,
+      side: transp ? THREE.DoubleSide : THREE.FrontSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = !transp;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return mesh;
+  }
 
-  // Acoperiș  
-  const roofL = addBox(3.2, 0.08, 6.2, -1.5, 3.5, 0, 0x88ccff, true, 0.22);  
-  roofL.rotation.z =  Math.PI / 6;  
-  const roofR = addBox(3.2, 0.08, 6.2,  1.5, 3.5, 0, 0x88ccff, true, 0.22);  
-  roofR.rotation.z = -Math.PI / 6;  
+  // ─── SOL ───────────────────────────────────────────────────
+  const sol = new THREE.Mesh(
+    new THREE.PlaneGeometry(10, 10),
+    new THREE.MeshStandardMaterial({ color: 0x2d4a1e })
+  );
+  sol.rotation.x = -Math.PI / 2;
+  sol.receiveShadow = true;
+  scene.add(sol);
 
-  // Cadru metalic  
-  [[-3,0],[-3,3],[3,0],[3,3],[0,-3],[0,3]].forEach(([x,z]) => {  
-    addBox(0.08, 3.2, 0.08, x, 1.5, z, 0x607850);  
-  });  
+  // ─── STRUCTURĂ SERĂ ────────────────────────────────────────
+  addBox(0.1, 3, 6, -3, 1.5,  0, 0x88ccff, true, 0.18); // perete stânga
+  addBox(0.1, 3, 6,  3, 1.5,  0, 0x88ccff, true, 0.18); // perete dreapta
+  addBox(6, 3, 0.1,  0, 1.5, -3, 0x88ccff, true, 0.18); // perete spate
+  addBox(6, 3, 0.1,  0, 1.5,  3, 0x88ccff, true, 0.18); // perete față
+  addBox(6, 0.12, 6, 0, 0,    0, 0x2d4a1e);              // podea
 
-  // ─── PLANTE ────────────────────────────────────────────────  
-  function addPlant(x, z) {  
-    addBox(0.3, 0.3, 0.3, x, 0.15, z, 0x8B4513); // ghiveci  
-    const stem = new THREE.Mesh(  
-      new THREE.CylinderGeometry(0.04, 0.06, 0.8, 8),  
-      new THREE.MeshStandardMaterial({ color: 0x3a7a20 })  
-    );  
-    stem.position.set(x, 0.7, z);  
-    stem.castShadow = true;  
-    scene.add(stem);  
-    const crown = new THREE.Mesh(  
-      new THREE.SphereGeometry(0.3, 10, 10),  
-      new THREE.MeshStandardMaterial({ color: 0x4caf50 })  
-    );  
-    crown.position.set(x, 1.2, z);  
-    crown.castShadow = true;  
-    scene.add(crown);  
-  }  
+  // Acoperiș
+  const roofL = addBox(3.2, 0.08, 6.2, -1.5, 3.5, 0, 0x88ccff, true, 0.22);
+  roofL.rotation.z =  Math.PI / 6;
+  const roofR = addBox(3.2, 0.08, 6.2,  1.5, 3.5, 0, 0x88ccff, true, 0.22);
+  roofR.rotation.z = -Math.PI / 6;
 
-  [[-2,1.5],[-2,-1.5],[0,1.5],[0,-1.5],[2,1.5],[2,-1.5]].forEach(  
-    ([x,z]) => addPlant(x, z)  
-  );  
+  // Cadru metalic
+  [[-3,0],[-3,3],[3,0],[3,3],[0,-3],[0,3]].forEach(([x,z]) => {
+    addBox(0.08, 3.2, 0.08, x, 1.5, z, 0x607850);
+  });
 
-  // ─── LED — BEC SEPARAT ─────────────────────────────────────  
-  // Suport metalic  
-  const suport = new THREE.Mesh(  
-    new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8),  
-    new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 })  
-  );  
-  suport.position.set(0, 2.95, 0);  
-  scene.add(suport);  
+  // ─── PLANTE ────────────────────────────────────────────────
+  function addPlant(x, z) {
+    addBox(0.3, 0.3, 0.3, x, 0.15, z, 0x8B4513); // ghiveci
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.06, 0.8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3a7a20 })
+    );
+    stem.position.set(x, 0.7, z);
+    stem.castShadow = true;
+    scene.add(stem);
+    const crown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0x4caf50 })
+    );
+    crown.position.set(x, 1.2, z);
+    crown.castShadow = true;
+    scene.add(crown);
+  }
 
-  // Glob bec  
-  const ledMat = new THREE.MeshStandardMaterial({  
-    color: 0x333333,  
-    emissive: 0xfff0aa,  
-    emissiveIntensity: 0,  
-    roughness: 0.1,  
-  });  
+  [[-2,1.5],[-2,-1.5],[0,1.5],[0,-1.5],[2,1.5],[2,-1.5]].forEach(
+    ([x,z]) => addPlant(x, z)
+  );
 
-  // Lumina punctuală — raza mică, nu afectează toată sera  
-  const ledLight = new THREE.PointLight(0xfff5cc, 0, 4);  
-  ledLight.position.copy(ledBulb.position);  
-  scene.add(ledLight);  
+  // ─── LED — BEC SEPARAT ─────────────────────────────────────
+  // Suport metalic
+  const suport = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8),
+    new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 })
+  );
+  suport.position.set(0, 2.95, 0);
+  scene.add(suport);
 
-  // ─── POMPĂ (indicator) ─────────────────────────────────────  
-  const pompaMesh = new THREE.Mesh(  
-    new THREE.BoxGeometry(0.3, 0.2, 0.3),  
-    new THREE.MeshStandardMaterial({ color: 0x1a3a8a, metalness: 0.6 })  
-  );  
-  pompaMesh.position.set(-2.5, 0.1, 2.5);  
-  scene.add(pompaMesh);  
+  // Material bec
+  const ledMat = new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    emissive: 0xfff0aa,
+    emissiveIntensity: 0,
+    roughness: 0.1,
+  });
 
-  // ─── UPDATE LED ────────────────────────────────────────────  
-  function updateLED(val) {  
-    const on = val > 0.5;  
-    ledMat.emissiveIntensity = on ? 2.0 : 0;  
-    ledMat.color.set(on ? 0xfff0aa : 0x333333);  
-    const el = document.getElementById('led');  
-    el.textContent = on ? 'ON' : 'OFF';  
-    el.style.color = on ? '#ffe080' : '#a0ffb0';  
-  }  
+  // Glob bec — DEFINIT ÎNAINTE de ledLight
+  const ledBulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 10, 10),
+    ledMat
+  );
+  ledBulb.position.set(0, 2.7, 0);
+  scene.add(ledBulb);
 
-  // ─── INFLUXDB FETCH ────────────────────────────────────────  
-  function parseInfluxCSV(csv) {  
-    const result = {};  
-    const lines = csv.split('\n');  
-    let headers = null;  
-    for (const line of lines) {  
-      if (!line.trim() || line.startsWith('#')) continue;  
-      const cols = line.split(',');  
-      if (!headers) { headers = cols; continue; }  
-      const fi = headers.indexOf('_field');  
-      const vi = headers.indexOf('_value');  
-      if (fi < 0 || vi < 0) continue;  
-      if (cols[fi] && cols[vi] !== '') result[cols[fi]] = parseFloat(cols[vi]);  
-    }  
-    return result;  
-  }  
+  // Lumina punctuală — raza mică, nu afectează toată sera
+  const ledLight = new THREE.PointLight(0xfff5cc, 0, 4);
+  ledLight.position.copy(ledBulb.position);
+  scene.add(ledLight);
 
-  function fetchDate() {  
-    fetch(INFLUX_URL, {  
-      method: 'POST',  
-      headers: {  
-        'Authorization': `Token ${INFLUX_TOKEN}`,  
-        'Content-Type': 'application/vnd.flux',  
-        'Accept': 'application/csv'  
-      },  
-      body: FLUX_QUERY  
-    })  
-    .then(r => r.text())  
-    .then(text => {  
-      const d = parseInfluxCSV(text);  
-      console.log('InfluxDB:', d);  
-      if (d.temperatura  !== undefined) document.getElementById('temp').textContent  = d.temperatura.toFixed(1)  + '°C';  
-      if (d.umiditate_aer !== undefined) document.getElementById('umaer').textContent = d.umiditate_aer.toFixed(0) + '%';  
-      if (d.umiditate_sol !== undefined) document.getElementById('umsol').textContent = d.umiditate_sol.toFixed(0) + '%';  
-      if (d.led          !== undefined) updateLED(d.led);  
-      document.getElementById('status').textContent =  
-        'actualizat ' + new Date().toLocaleTimeString('ro-RO');  
-    })  
-    .catch(err => {  
-      console.error('Fetch error:', err);  
-      document.getElementById('status').textContent = 'eroare fetch';  
-    });  
-  }  
+  // ─── POMPĂ (indicator) ─────────────────────────────────────
+  const pompaMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.2, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x1a3a8a, metalness: 0.6 })
+  );
+  pompaMesh.position.set(-2.5, 0.1, 2.5);
+  scene.add(pompaMesh);
 
-  fetchDate();  
-  setInterval(fetchDate, REFRESH_MS);  
+  // ─── UPDATE LED ────────────────────────────────────────────
+  function updateLED(val) {
+    const on = val > 0.5;
+    ledMat.emissiveIntensity = on ? 2.0 : 0;
+    ledMat.color.set(on ? 0xfff0aa : 0x333333);
+    ledLight.intensity = on ? 3.0 : 0;
+    const el = document.getElementById('led');
+    el.textContent = on ? 'ON' : 'OFF';
+    el.style.color = on ? '#ffe080' : '#a0ffb0';
+  }
 
-  // ─── RESIZE ────────────────────────────────────────────────  
-  window.addEventListener('resize', () => {  
-    camera.aspect = innerWidth / innerHeight;  
-    camera.updateProjectionMatrix();  
-    renderer.setSize(innerWidth, innerHeight);  
-  });  
+  // ─── INFLUXDB FETCH ────────────────────────────────────────
+  function parseInfluxCSV(csv) {
+    const result = {};
+    const lines = csv.split('\n');
+    let headers = null;
+    for (const line of lines) {
+      if (!line.trim() || line.startsWith('#')) continue;
+      const cols = line.split(',');
+      if (!headers) { headers = cols; continue; }
+      const fi = headers.indexOf('_field');
+      const vi = headers.indexOf('_value');
+      if (fi < 0 || vi < 0) continue;
+      if (cols[fi] && cols[vi] !== '') result[cols[fi]] = parseFloat(cols[vi]);
+    }
+    return result;
+  }
 
-  // ─── ANIMATE ───────────────────────────────────────────────  
-  function animate() {  
-    requestAnimationFrame(animate);  
-    controls.update();  
-    renderer.render(scene, camera);  
-  }  
-  animate();  
-</script>  
-</body>  
-</html>  
+  function fetchDate() {
+    fetch(INFLUX_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${INFLUX_TOKEN}`,
+        'Content-Type': 'application/vnd.flux',
+        'Accept': 'application/csv'
+      },
+      body: FLUX_QUERY
+    })
+    .then(r => r.text())
+    .then(text => {
+      const d = parseInfluxCSV(text);
+      console.log('InfluxDB:', d);
+      if (d.temperatura   !== undefined) document.getElementById('temp').textContent  = d.temperatura.toFixed(1)  + '°C';
+      if (d.umiditate_aer !== undefined) document.getElementById('umaer').textContent = d.umiditate_aer.toFixed(0) + '%';
+      if (d.umiditate_sol !== undefined) document.getElementById('umsol').textContent = d.umiditate_sol.toFixed(0) + '%';
+      if (d.led           !== undefined) updateLED(d.led);
+      document.getElementById('status').textContent =
+        'actualizat ' + new Date().toLocaleTimeString('ro-RO');
+    })
+    .catch(err => {
+      console.error('Fetch error:', err);
+      document.getElementById('status').textContent = 'eroare fetch';
+    });
+  }
+
+  fetchDate();
+  setInterval(fetchDate, REFRESH_MS);
+
+  // ─── RESIZE ────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  // ─── ANIMATE ───────────────────────────────────────────────
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+</script>
+
+</body>
+</html>
