@@ -86,8 +86,8 @@
   controls.target.set(0, 1, 0);  
 
   // ─── LUMINI PRINCIPALE (fixe, independente de LED) ─────────  
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));  
-  const sun = new THREE.DirectionalLight(0xffd090, 2.5);  
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));  
+  const sun = new THREE.DirectionalLight(0xffd090, 4.0);  
   sun.position.set(5, 10, 7);  
   sun.castShadow = true;  
   sun.shadow.mapSize.set(1024, 1024);  
