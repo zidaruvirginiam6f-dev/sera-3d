@@ -1,0 +1,244 @@
+<style>  
+* { margin:0; padding:0; box-sizing:border-box; }  
+#gh { position:relative; width:100%; height:560px; background:#0b140b; overflow:hidden; }  
+#hud { position:absolute; top:10px; left:10px; z-index:10; display:flex; flex-direction:column; gap:4px; font:12px 'Courier New',monospace; pointer-events:none; }  
+.sv { padding:3px 10px; border-radius:5px; background:rgba(0,0,0,0.75); color:#ddd; border-left:3px solid #44cc44; }  
+.sv.w { border-color:#ffaa22; color:#ffdd88; }  
+.sv.c { border-color:#ff4444; color:#ff9999; }  
+#info { position:absolute; bottom:8px; right:10px; z-index:10; color:#446644; font:10px monospace; }  
+#tip  { position:absolute; bottom:8px; left:10px;  z-index:10; color:#335533; font:10px monospace; }  
+</style>  
+
+<div id="gh">  
+  <div id="hud">  
+    <div class="sv" id="sv-t">🌡 —°C</div>  
+    <div class="sv" id="sv-h">💧 —%</div>  
+    <div class="sv" id="sv-s">🌱 —%</div>  
+    <div class="sv" id="sv-l">💡 —</div>  
+  </div>  
+  <div id="info">inițializare…</div>  
+  <div id="tip">🖱 drag = rotire · scroll = zoom</div>  
+</div>  
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>  
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>  
+<script>  
+(function(){  
+  const wrap = document.getElementById('gh');  
+  const W = wrap.clientWidth||800, H = wrap.clientHeight||560;  
+
+  /* --- renderer --- */  
+  const renderer = new THREE.WebGLRenderer({antialias:true});  
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));  
+  renderer.setSize(W,H);  
+  renderer.shadowMap.enabled = true;  
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;  
+  wrap.insertBefore(renderer.domElement, wrap.firstChild);  
+
+  const scene = new THREE.Scene();  
+  scene.background = new THREE.Color(0x0b140b);  
+  scene.fog = new THREE.FogExp2(0x0b140b, 0.022);  
+
+  const cam = new THREE.PerspectiveCamera(52, W/H, 0.1, 120);  
+  cam.position.set(11,8,11);  
+
+  const ctrl = new THREE.OrbitControls(cam, renderer.domElement);  
+  ctrl.enableDamping = true; ctrl.dampingFactor = 0.07;  
+  ctrl.target.set(0,1,0); ctrl.minDistance=4; ctrl.maxDistance=26;  
+  ctrl.maxPolarAngle = Math.PI*0.47;  
+
+  /* --- lights --- */  
+  scene.add(new THREE.AmbientLight(0x203820, 0.9));  
+  scene.add(new THREE.HemisphereLight(0x88bbff, 0x331100, 0.3));  
+
+  const sun = new THREE.DirectionalLight(0xffd090, 1.1);  
+  sun.position.set(10,15,8); sun.castShadow=true;  
+  sun.shadow.mapSize.setScalar(1024);  
+  ['left','right','top','bottom'].forEach((k,i)=>sun.shadow.camera[k]=[-12,12,12,-12][i]);  
+  scene.add(sun);  
+
+  const ledLights = [-3,0,3].map(x=>{  
+    const l = new THREE.PointLight(0xfff5c0,0,10);  
+    l.position.set(x,3.7,0); scene.add(l); return l;  
+  });  
+
+  /* --- materials --- */  
+  const M = {  
+    frame : new THREE.MeshStandardMaterial({color:0x90a898,metalness:.75,roughness:.3}),  
+    glass : new THREE.MeshPhongMaterial({color:0x99ffbb,transparent:true,opacity:.10,side:THREE.DoubleSide,depthWrite:false}),  
+    soil  : new THREE.MeshStandardMaterial({color:0x5a3d1e,roughness:.95}),  
+    floor : new THREE.MeshStandardMaterial({color:0x5a5a50,roughness:1}),  
+    stem  : new THREE.MeshStandardMaterial({color:0x3d6b20,roughness:.85}),  
+    leaf  : new THREE.MeshStandardMaterial({color:0x2e8b1a,roughness:.88}),  
+    fruit : new THREE.MeshStandardMaterial({color:0xcc2200,roughness:.45,metalness:.05}),  
+    ledS  : new THREE.MeshBasicMaterial({color:0x333300}),  
+    pump  : new THREE.MeshStandardMaterial({color:0x1a3a9a,metalness:.6,roughness:.4}),  
+    sensor: new THREE.MeshStandardMaterial({color:0xbbbbbb,metalness:.8,roughness:.25}),  
+    pcb   : new THREE.MeshStandardMaterial({color:0x115511,roughness:.7}),  
+  };  
+
+  function box(w,h,d,mat,px=0,py=0,pz=0,rx=0,ry=0,rz=0){  
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);  
+    m.position.set(px,py,pz); m.rotation.set(rx,ry,rz);  
+    m.castShadow=true; m.receiveShadow=true; scene.add(m); return m;  
+  }  
+
+  /* --- FLOOR --- */  
+  box(13,.2,9,M.floor,0,-.1,0);  
+  box(10,.28,7,M.soil ,0,.04,0);  
+
+  /* --- GREENHOUSE FRAME --- */  
+  const PH=3.5, pw=.11;  
+  // vertical pillars  
+  [[-5.5,3.5],[-5.5,-3.5],[5.5,3.5],[5.5,-3.5],  
+   [-2.5,3.5],[0,3.5],[2.5,3.5],  
+   [-2.5,-3.5],[0,-3.5],[2.5,-3.5]].forEach(([x,z])=>  
+    box(pw,PH,pw,M.frame,x,PH/2,z));  
+  // horizontal rails  
+  [[11,pw,pw,0,pw/2,3.5],[11,pw,pw,0,pw/2,-3.5],  
+   [pw,pw,7,-5.5,pw/2,0],[pw,pw,7,5.5,pw/2,0],  
+   [11,pw,pw,0,PH,3.5],[11,pw,pw,0,PH,-3.5],  
+   [pw,pw,7,-5.5,PH,0],[pw,pw,7,5.5,PH,0]].forEach(([w,h,d,px,py,pz])=>  
+    box(w,h,d,M.frame,px,py,pz));  
+  // ridge beam + rafters  
+  box(11,pw,pw,M.frame,0,PH+1.5,0);  
+  const ra = Math.atan2(1.5,3.5);  
+  for(let x=-5.5;x<=5.5;x+=2.5){  
+    const r=box(pw,1.82,pw,M.frame,x,PH+.75,-1.9); r.rotation.x= ra;  
+    const r2=box(pw,1.82,pw,M.frame,x,PH+.75, 1.9); r2.rotation.x=-ra;  
+  }  
+
+  /* --- GLASS PANELS --- */  
+  [[0,1.75,3.5,0],[0,1.75,-3.5,Math.PI]].forEach(([px,py,pz,ry])=>{  
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(11,3.5),M.glass);  
+    m.position.set(px,py,pz); m.rotation.y=ry; scene.add(m);  
+  });  
+  [[5.5,1.75,0,Math.PI/2],[-5.5,1.75,0,-Math.PI/2]].forEach(([px,py,pz,ry])=>{  
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(7,3.5),M.glass);  
+    m.position.set(px,py,pz); m.rotation.y=ry; scene.add(m);  
+  });  
+  // roof  
+  [[ra,0,PH+.75,-1.9],[-ra,0,PH+.75,1.9]].forEach(([rx,ry,py,pz])=>{  
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(11,3.9),M.glass);  
+    m.position.set(0,py,pz); m.rotation.x=Math.PI/2-Math.abs(rx)*(pz<0?1:-1);  
+    scene.add(m);  
+  });  
+
+  /* --- LED STRIP --- */  
+  const ledStrip = box(10,.06,.35,M.ledS,0,PH+1.45,0);  
+
+  /* --- PLANTS --- */  
+  const plantGroup = new THREE.Group();  
+  for(let xi=-4;xi<=4;xi+=1.6){  
+    for(let zi=-2.5;zi<=2.5;zi+=1.2){  
+      const h=.55+Math.random()*.45;  
+      // stem  
+      const s=new THREE.Mesh(new THREE.CylinderGeometry(.03,.055,h,6),M.stem);  
+      s.position.set(xi,h/2,zi); s.castShadow=true; plantGroup.add(s);  
+      // foliage  
+      const r=.17+Math.random()*.09;  
+      const lf=new THREE.Mesh(new THREE.SphereGeometry(r,7,5),M.leaf);  
+      lf.position.set(xi,h+r*.7,zi); lf.scale.y=.73; lf.castShadow=true; plantGroup.add(lf);  
+      // fruit (70%)  
+      if(Math.random()>.3){  
+        const fr=.07+Math.random()*.04;  
+        const ft=new THREE.Mesh(new THREE.SphereGeometry(fr,7,5),M.fruit);  
+        const a=Math.random()*Math.PI*2;  
+        ft.position.set(xi+Math.cos(a)*.16,h-.08,zi+Math.sin(a)*.16);  
+        plantGroup.add(ft);  
+      }  
+    }  
+  }  
+  scene.add(plantGroup);  
+
+  /* --- SENSORS & EQUIPMENT --- */  
+  // soil probes  
+  box(.05,.42,.05,M.sensor,2.8,.21,-1.5);  
+  box(.05,.42,.05,M.sensor,2.95,.21,-1.5);  
+  box(.14,.18,.06,M.pcb,2.87,.47,-1.5);  
+  // DHT11 (wall)  
+  box(.2,.28,.1,M.pcb,-5.2,2.0,2.85);  
+  // pump  
+  const pumpM=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.52,12),M.pump);  
+  pumpM.position.set(4.5,.26,2.5); scene.add(pumpM);  
+  // drip pipe  
+  box(.05,.05,6,new THREE.MeshStandardMaterial({color:0x1133bb,metalness:.5}),4.3,.8,0);  
+
+  /* --- DATA --- */  
+  let data={temperatura:22,umiditate_aer:55,umiditate_sol:70,led:0};  
+  const DS='/api/datasources/uid/efkdndew0bxtsc/resources/api/v2/query';  
+
+  async function qFlux(field){  
+    const flux=`from(bucket:"arduino_digitaltwin")|>range(start:-5m)|>filter(fn:(r)=>r._measurement=="sera")|>filter(fn:(r)=>r._field=="${field}")|>last()`;  
+    const r=await fetch(DS,{method:'POST',headers:{'Content-Type':'application/vnd.flux','Accept':'application/csv'},body:flux});  
+    if(!r.ok)return null;  
+    const csv=await r.text();  
+    const rows=csv.split('\n').filter(l=>l&&!l.startsWith('#'));  
+    if(rows.length<2)return null;  
+    const h=rows[0].split(','), v=rows[rows.length-1].split(',');  
+    const i=h.indexOf('_value'); return i>=0?parseFloat(v[i]):null;  
+  }  
+
+  async function fetchAll(){  
+    document.getElementById('info').textContent='⟳ …';  
+    try{  
+      const [t,h,s,l]=await Promise.all([qFlux('temperatura'),qFlux('umiditate_aer'),qFlux('umiditate_sol'),qFlux('led')]);  
+      if(t!=null)data.temperatura=t; if(h!=null)data.umiditate_aer=h;  
+      if(s!=null)data.umiditate_sol=s; if(l!=null)data.led=l;  
+      applyData();  
+      document.getElementById('info').textContent='✓ '+new Date().toLocaleTimeString('ro-RO');  
+    }catch(e){document.getElementById('info').textContent='✗ eroare';}  
+  }  
+
+  function applyData(){  
+    const{temperatura:t,umiditate_aer:h,umiditate_sol:s,led:l}=data;  
+    const sv=(id,txt,warn,crit)=>{  
+      const el=document.getElementById(id); el.textContent=txt;  
+      el.className='sv'+(crit?' c':warn?' w':'');  
+    };  
+    sv('sv-t',`🌡 Temp: ${t.toFixed(1)}°C`, t<15||t>32, t>38||t<8);  
+    sv('sv-h',`💧 Umid aer: ${h.toFixed(0)}%`, h<30||h>85, h<15||h>95);  
+    sv('sv-s',`🌱 Umid sol: ${s.toFixed(0)}%`, s<30, s<15);  
+    sv('sv-l',`💡 LED: ${l?'🟡 ON':'⚫ OFF'}`, !l, false);  
+
+    // LED 3D  
+    const li=l?1.8:0;  
+    ledLights.forEach(p=>p.intensity=li);  
+    M.ledS.color.setHex(l?0xfff5c0:0x222200);  
+
+    // Soil moisture → colour  
+    const wet=s/100;  
+    M.soil.color.setRGB(.22-.12*wet,.15-.07*wet,.06);  
+
+    // Temperature → ambient warmth  
+    const wm=Math.max(0,Math.min(1,(t-10)/30));  
+    scene.getObjectByName&&scene.traverse(o=>{  
+      if(o.isAmbientLight) o.color.setRGB(.1+wm*.12,.18+wm*.04,.1);  
+    });  
+
+    // Fog → humidity  
+    scene.fog.density=0.018+h/100*.018;  
+  }  
+
+  /* --- ANIMATE --- */  
+  let tick=0;  
+  function animate(){  
+    requestAnimationFrame(animate); tick+=.007; ctrl.update();  
+    // gentle sway  
+    plantGroup.children.forEach((o,i)=>{  
+      if(o.geometry.type==='SphereGeometry'){  
+        o.rotation.z=Math.sin(tick+i*.6)*.022;  
+        o.rotation.x=Math.cos(tick*.7+i*.5)*.018;  
+      }  
+    });  
+    renderer.render(scene,cam);  
+  }  
+
+  window.addEventListener('resize',()=>{  
+    const w=wrap.clientWidth,h=wrap.clientHeight;  
+    cam.aspect=w/h; cam.updateProjectionMatrix(); renderer.setSize(w,h);  
+  });  
+
+  animate(); fetchAll(); setInterval(fetchAll,10000);  
+})();  
+</script>  
