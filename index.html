@@ -175,9 +175,6 @@
     emissiveIntensity: 0,  
     roughness: 0.1,  
   });  
-  const ledBulb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), ledMat);  
-  ledBulb.position.set(0, 2.7, 0);  
-  scene.add(ledBulb);  
 
   // Lumina punctuală — raza mică, nu afectează toată sera  
   const ledLight = new THREE.PointLight(0xfff5cc, 0, 4);  
@@ -197,7 +194,6 @@
     const on = val > 0.5;  
     ledMat.emissiveIntensity = on ? 2.0 : 0;  
     ledMat.color.set(on ? 0xfff0aa : 0x333333);  
-    ledLight.intensity = on ? 1.8 : 0;  
     const el = document.getElementById('led');  
     el.textContent = on ? 'ON' : 'OFF';  
     el.style.color = on ? '#ffe080' : '#a0ffb0';  
