@@ -48,10 +48,10 @@
   ctrl.maxPolarAngle = Math.PI*0.47;  
 
   /* --- lights --- */  
-  scene.add(new THREE.AmbientLight(0x203820, 0.9));  
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));  
   scene.add(new THREE.HemisphereLight(0x88bbff, 0x331100, 0.3));  
 
-  const sun = new THREE.DirectionalLight(0xffd090, 1.1);  
+  const sun = new THREE.DirectionalLight(0xffd090, 2.5);  
   sun.position.set(10,15,8); sun.castShadow=true;  
   sun.shadow.mapSize.setScalar(1024);  
   ['left','right','top','bottom'].forEach((k,i)=>sun.shadow.camera[k]=[-12,12,12,-12][i]);  
