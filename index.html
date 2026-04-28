@@ -6,42 +6,64 @@
   <title>Seră 3D — Digital Twin</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0a0f0a; overflow: hidden; font-family: monospace; }
+    body { background: #0a0f0a; overflow: hidden; font-family: 'Courier New', monospace; }
     canvas { display: block; }
-    #hud {
-      position: absolute; top: 16px; left: 16px;
-      display: flex; flex-direction: column; gap: 6px;
-      pointer-events: none;
-    }
-    .hud-item {
-      background: rgba(0,20,0,0.7);
-      border: 1px solid rgba(0,255,80,0.3);
-      border-radius: 6px; padding: 4px 10px;
-      color: #a0ffb0; font-size: 13px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    #hint {
-      position: absolute; bottom: 10px; left: 16px;
-      color: rgba(100,200,120,0.5); font-size: 11px;
-      pointer-events: none;
-    }
-    #status {
-      position: absolute; bottom: 10px; right: 16px;
-      color: rgba(100,200,120,0.5); font-size: 11px;
-      pointer-events: none;
-    }
+
+```
+#vignette {
+  position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    transparent 55%, rgba(0,0,0,0.55) 100%);
+  z-index: 10;
+}
+#hud {
+  position: absolute; top: 16px; left: 16px;
+  display: flex; flex-direction: column; gap: 7px;
+  pointer-events: none; z-index: 20;
+}
+.hud-item {
+  background: rgba(5,25,5,0.82);
+  border: 1px solid rgba(0,255,80,0.25);
+  border-left: 3px solid rgba(0,255,80,0.6);
+  border-radius: 4px; padding: 5px 12px;
+  color: #b8ffcc; font-size: 13px;
+  display: flex; align-items: center; gap: 8px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  letter-spacing: 0.03em;
+}
+.hud-label { color: rgba(150,220,160,0.6); font-size: 10px; margin-right: 2px; }
+#hint {
+  position: absolute; bottom: 12px; left: 16px;
+  color: rgba(100,200,120,0.45); font-size: 11px;
+  pointer-events: none; z-index: 20; letter-spacing: 0.05em;
+}
+#status {
+  position: absolute; bottom: 12px; right: 16px;
+  color: rgba(100,200,120,0.45); font-size: 11px;
+  pointer-events: none; z-index: 20;
+}
+#title {
+  position: absolute; top: 16px; right: 16px;
+  color: rgba(180,255,200,0.35); font-size: 11px;
+  pointer-events: none; z-index: 20;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+```
+
   </style>
 </head>
 <body>
-
+<div id="vignette"></div>
 <div id="hud">
-  <div class="hud-item">🌡 <span id="temp">—°C</span></div>
-  <div class="hud-item">💧 <span id="umaer">—%</span></div>
-  <div class="hud-item">🌱 <span id="umsol">—%</span></div>
-  <div class="hud-item">💡 <span id="led">—</span></div>
+  <div class="hud-item">🌡 <span class="hud-label">TEMP</span><span id="temp">—°C</span></div>
+  <div class="hud-item">💧 <span class="hud-label">AER</span><span id="umaer">—%</span></div>
+  <div class="hud-item">🌱 <span class="hud-label">SOL</span><span id="umsol">—%</span></div>
+  <div class="hud-item">💡 <span class="hud-label">LED</span><span id="led">—</span></div>
 </div>
-<div id="hint">⊙ drag = rotire · scroll = zoom</div>
-<div id="status">initializare…</div>
+<div id="title">Seră · Digital Twin</div>
+<div id="hint">⊙ drag · scroll zoom · click dreapta pan</div>
+<div id="status">inițializare…</div>
 
 <script type="importmap">
 {
@@ -63,48 +85,83 @@
   |> range(start: -5m)
   |> filter(fn:(r) => r._measurement == "sera")
   |> last()`;
-  const REFRESH_MS   = 5000;
+  const REFRESH_MS = 5000;
 
-  // ─── SCENE ─────────────────────────────────────────────────
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0f0a);
-  scene.fog = new THREE.Fog(0x0a0f0a, 20, 40);
-
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
-  camera.position.set(6, 5, 8);
-
+  // ─── RENDERER ──────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
   document.body.appendChild(renderer.domElement);
+
+  // ─── SCENE ─────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x2a4a2a, 0.025);
+
+  // Cer gradient shader
+  const skyGeo = new THREE.SphereGeometry(60, 16, 8);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      topColor:    { value: new THREE.Color(0x1a3a5c) },
+      bottomColor: { value: new THREE.Color(0x4a7a3a) },
+    },
+    vertexShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        vWorldPos = (modelMatrix * vec4(position,1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 topColor; uniform vec3 bottomColor;
+      varying vec3 vWorldPos;
+      void main() {
+        float h = clamp(normalize(vWorldPos).y * 0.5 + 0.5, 0.0, 1.0);
+        gl_FragColor = vec4(mix(bottomColor, topColor, h), 1.0);
+      }`
+  });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  // ─── CAMERA ────────────────────────────────────────────────
+  const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 120);
+  camera.position.set(8, 6, 10);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
+  controls.dampingFactor = 0.06;
   controls.minDistance = 3;
-  controls.maxDistance = 20;
-  controls.target.set(0, 1, 0);
+  controls.maxDistance = 25;
+  controls.maxPolarAngle = Math.PI / 2.05;
+  controls.target.set(0, 1.2, 0);
 
-  // ─── LUMINI PRINCIPALE (fixe, independente de LED) ─────────
-  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-  const sun = new THREE.DirectionalLight(0xffd090, 4.0);
-  sun.position.set(5, 10, 7);
+  // ─── LUMINI ────────────────────────────────────────────────
+  scene.add(new THREE.AmbientLight(0xfff0e0, 0.8));
+  const sun = new THREE.DirectionalLight(0xfff5d0, 3.5);
+  sun.position.set(8, 14, 8);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 50;
+  sun.shadow.camera.left = -10;
+  sun.shadow.camera.right = 10;
+  sun.shadow.camera.top = 10;
+  sun.shadow.camera.bottom = -10;
+  sun.shadow.bias = -0.001;
   scene.add(sun);
-
-  // Lumina de umplere din spate
-  const fillLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  fillLight.position.set(-5, 8, -5);
-  scene.add(fillLight);
+  const fill = new THREE.DirectionalLight(0xc0d8ff, 1.2);
+  fill.position.set(-6, 8, -6);
+  scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0x88bb66, 0x3a5a20, 0.6));
 
   // ─── HELPER addBox ─────────────────────────────────────────
   function addBox(w, h, d, x, y, z, color, transp = false, opacity = 1) {
     const mat = new THREE.MeshStandardMaterial({
       color, transparent: transp, opacity,
-      roughness: transp ? 0.05 : 0.8,
-      metalness: transp ? 0.1 : 0.2,
+      roughness: transp ? 0.03 : 0.85,
+      metalness: transp ? 0.05 : 0.15,
       side: transp ? THREE.DoubleSide : THREE.FrontSide,
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -116,160 +173,210 @@
   }
 
   // ─── SOL ───────────────────────────────────────────────────
-  const sol = new THREE.Mesh(
-    new THREE.PlaneGeometry(10, 10),
-    new THREE.MeshStandardMaterial({ color: 0x2d4a1e })
+  const exteriorFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 40),
+    new THREE.MeshStandardMaterial({ color: 0x3a5a25, roughness: 1.0 })
   );
-  sol.rotation.x = -Math.PI / 2;
-  sol.receiveShadow = true;
-  scene.add(sol);
+  exteriorFloor.rotation.x = -Math.PI / 2;
+  exteriorFloor.receiveShadow = true;
+  scene.add(exteriorFloor);
+
+  const solInterior = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 6),
+    new THREE.MeshStandardMaterial({ color: 0x1e3a10, roughness: 0.95 })
+  );
+  solInterior.rotation.x = -Math.PI / 2;
+  solInterior.position.y = 0.005;
+  solInterior.receiveShadow = true;
+  scene.add(solInterior);
+
+  const gridHelper = new THREE.GridHelper(6, 12, 0x2a4a18, 0x2a4a18);
+  gridHelper.position.y = 0.01;
+  scene.add(gridHelper);
+
+  addBox(6, 0.08, 6, 0, 0, 0, 0x1e3a10);
 
   // ─── STRUCTURĂ SERĂ ────────────────────────────────────────
-  addBox(0.1, 3, 6, -3, 1.5,  0, 0x88ccff, true, 0.18); // perete stânga
-  addBox(0.1, 3, 6,  3, 1.5,  0, 0x88ccff, true, 0.18); // perete dreapta
-  addBox(6, 3, 0.1,  0, 1.5, -3, 0x88ccff, true, 0.18); // perete spate
-  addBox(6, 3, 0.1,  0, 1.5,  3, 0x88ccff, true, 0.18); // perete față
-  addBox(6, 0.12, 6, 0, 0,    0, 0x2d4a1e);              // podea
+  addBox(0.05, 3, 6, -3, 1.5,  0, 0xaaddff, true, 0.15);
+  addBox(0.05, 3, 6,  3, 1.5,  0, 0xaaddff, true, 0.15);
+  addBox(6, 3, 0.05,  0, 1.5, -3, 0xaaddff, true, 0.15);
+  // Perete față cu gol ușă
+  addBox(2.2, 3, 0.05, -1.9, 1.5, 3, 0xaaddff, true, 0.15);
+  addBox(2.2, 3, 0.05,  1.9, 1.5, 3, 0xaaddff, true, 0.15);
+  addBox(6, 0.8, 0.05,  0, 2.6, 3, 0xaaddff, true, 0.15);
 
   // Acoperiș
-  const roofL = addBox(3.2, 0.08, 6.2, -1.5, 3.5, 0, 0x88ccff, true, 0.22);
-  roofL.rotation.z =  Math.PI / 6;
-  const roofR = addBox(3.2, 0.08, 6.2,  1.5, 3.5, 0, 0x88ccff, true, 0.22);
-  roofR.rotation.z = -Math.PI / 6;
+  const roofMat = new THREE.MeshStandardMaterial({
+    color: 0x99ccee, transparent: true, opacity: 0.18,
+    roughness: 0.02, side: THREE.DoubleSide,
+  });
+  const roofL = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.06, 6.3), roofMat);
+  roofL.position.set(-1.5, 3.55, 0); roofL.rotation.z = Math.PI / 6;
+  scene.add(roofL);
+  const roofR = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.06, 6.3), roofMat);
+  roofR.position.set( 1.5, 3.55, 0); roofR.rotation.z = -Math.PI / 6;
+  scene.add(roofR);
 
   // Cadru metalic
-  [[-3,0],[-3,3],[3,0],[3,3],[0,-3],[0,3]].forEach(([x,z]) => {
-    addBox(0.08, 3.2, 0.08, x, 1.5, z, 0x607850);
+  const matFrame = new THREE.MeshStandardMaterial({ color: 0x5a7040, metalness: 0.4, roughness: 0.6 });
+  [[-3,-3],[-3,0],[-3,3],[3,-3],[3,0],[3,3]].forEach(([x,z]) => {
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.1, 8), matFrame);
+    col.position.set(x, 1.55, z); col.castShadow = true; scene.add(col);
+  });
+  [[-3],[3]].forEach(([x]) => {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 6.1), matFrame);
+    beam.position.set(x, 3.0, 0); scene.add(beam);
+  });
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 6.2), matFrame);
+  ridge.position.set(0, 4.18, 0); scene.add(ridge);
+  for (let z = -2.5; z <= 2.5; z += 1.25) {
+    const pL = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.05, 0.06), matFrame);
+    pL.position.set(-1.5, 3.55, z); pL.rotation.z = Math.PI / 6; scene.add(pL);
+    const pR = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.05, 0.06), matFrame);
+    pR.position.set( 1.5, 3.55, z); pR.rotation.z = -Math.PI / 6; scene.add(pR);
+  }
+
+  // Ușă
+  const matUsa = new THREE.MeshStandardMaterial({ color: 0x607850, metalness: 0.3, roughness: 0.7 });
+  const usaL2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), matUsa);
+  usaL2.position.set(-0.8, 1.1, 3.0); scene.add(usaL2);
+  const usaR2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), matUsa);
+  usaR2.position.set( 0.8, 1.1, 3.0); scene.add(usaR2);
+  const usaTop2 = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.08, 0.08), matUsa);
+  usaTop2.position.set(0, 2.2, 3.0); scene.add(usaTop2);
+  addBox(1.55, 2.1, 0.04, 0, 1.05, 3.0, 0xaaddff, true, 0.10);
+  const matManer = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.9, roughness: 0.1 });
+  const maner = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 8), matManer);
+  maner.rotation.x = Math.PI / 2;
+  maner.position.set(0.5, 1.1, 3.06);
+  scene.add(maner);
+
+  // Jgheaburi irigare
+  const matJgheab = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.5 });
+  [-1, 1].forEach(row => {
+    const jg = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.06, 0.10), matJgheab);
+    jg.position.set(0, 0.04, row); scene.add(jg);
   });
 
-  // ─── PLANTE DE ROȘII ───────────────────────────────────────
-  const matTulpina   = new THREE.MeshStandardMaterial({ color: 0x4a7c30, roughness: 0.9 });
-  const matFrunza    = new THREE.MeshStandardMaterial({ color: 0x2e6e1a, roughness: 0.8, side: THREE.DoubleSide });
-  const matRosie     = new THREE.MeshStandardMaterial({ color: 0xcc2200, roughness: 0.4, metalness: 0.05 });
-  const matRosieVerde= new THREE.MeshStandardMaterial({ color: 0x5a8a20, roughness: 0.5 });
-  const matGhiveci   = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 1.0 });
-  const matPamant    = new THREE.MeshStandardMaterial({ color: 0x3d2b1a, roughness: 1.0 });
+  // ─── BENZI LED tavan ───────────────────────────────────────
+  const ledStrips = [];
+  const ledLights = [];
+  [-1.5, 0, 1.5].forEach(z => {
+    const stripMat = new THREE.MeshStandardMaterial({
+      color: 0x333333, emissive: new THREE.Color(0xfff0aa),
+      emissiveIntensity: 0, roughness: 0.3,
+    });
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.05, 0.07), stripMat);
+    strip.position.set(0, 2.88, z);
+    scene.add(strip);
+    ledStrips.push(strip);
+    const pt = new THREE.PointLight(0xfff5cc, 0, 5);
+    pt.position.set(0, 2.75, z);
+    scene.add(pt);
+    ledLights.push(pt);
+  });
 
-  function addLeaf(parent, ox, oy, oz, rotY, rotZ) {
-    // Frunză = elipsoid turtit (box scalat)
-    const geo = new THREE.SphereGeometry(0.18, 6, 4);
-    geo.scale(1, 0.15, 0.55);
+  // Bec central
+  const suport = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.28, 8),
+    new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 })
+  );
+  suport.position.set(0, 2.94, 0); scene.add(suport);
+  const ledMat = new THREE.MeshStandardMaterial({
+    color: 0x333333, emissive: 0xfff0aa, emissiveIntensity: 0, roughness: 0.1,
+  });
+  const ledBulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), ledMat);
+  ledBulb.position.set(0, 2.72, 0); scene.add(ledBulb);
+  const ledLight = new THREE.PointLight(0xfff5cc, 0, 6);
+  ledLight.position.copy(ledBulb.position); scene.add(ledLight);
+
+  // ─── PLANTE DE ROȘII ───────────────────────────────────────
+  const matTulpina    = new THREE.MeshStandardMaterial({ color: 0x4a7c30, roughness: 0.9 });
+  const matFrunza     = new THREE.MeshStandardMaterial({ color: 0x2e6e1a, roughness: 0.8, side: THREE.DoubleSide });
+  const matRosie      = new THREE.MeshStandardMaterial({ color: 0xcc2200, roughness: 0.35, metalness: 0.05 });
+  const matRosieVerde = new THREE.MeshStandardMaterial({ color: 0x5a8a20, roughness: 0.5 });
+  const matGhiveci    = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 1.0 });
+  const matPamant     = new THREE.MeshStandardMaterial({ color: 0x3d2b1a, roughness: 1.0 });
+  const matArac       = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.9 });
+
+  function addLeaf(ox, oy, oz, rotY, rotZ) {
+    const geo = new THREE.SphereGeometry(0.17, 6, 4);
+    geo.scale(1, 0.13, 0.5);
     const leaf = new THREE.Mesh(geo, matFrunza);
     leaf.position.set(ox, oy, oz);
-    leaf.rotation.y = rotY;
-    leaf.rotation.z = rotZ;
-    leaf.castShadow = true;
-    scene.add(leaf);
+    leaf.rotation.y = rotY; leaf.rotation.z = rotZ;
+    leaf.castShadow = true; scene.add(leaf);
   }
 
   function addTomato(x, y, z, ripe = true) {
     const mat = ripe ? matRosie : matRosieVerde;
-    const r = 0.09 + Math.random() * 0.04;
-    const tom = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), mat);
-    tom.position.set(x, y, z);
-    tom.castShadow = true;
-    scene.add(tom);
-    // Calice mic deasupra
-    const caliceMat = new THREE.MeshStandardMaterial({ color: 0x3a6a10 });
-    const calice = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.05, 5), caliceMat);
-    calice.position.set(x, y + r + 0.02, z);
-    scene.add(calice);
+    const r = 0.08 + Math.random() * 0.04;
+    const tom = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 9), mat);
+    tom.position.set(x, y, z); tom.castShadow = true; scene.add(tom);
+    const calice = new THREE.Mesh(new THREE.ConeGeometry(0.033, 0.042, 5),
+      new THREE.MeshStandardMaterial({ color: 0x3a6a10 }));
+    calice.position.set(x, y + r + 0.013, z); scene.add(calice);
   }
 
   function addTomatoPlant(px, pz) {
-    // ── Ghiveci ──
-    const ghiveci = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22, 0.16, 0.28, 10),
-      matGhiveci
-    );
-    ghiveci.position.set(px, 0.14, pz);
-    scene.add(ghiveci);
-    // Pământ în ghiveci
-    const pamant = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.20, 0.20, 0.04, 10),
-      matPamant
-    );
-    pamant.position.set(px, 0.27, pz);
-    scene.add(pamant);
+    // Arac
+    const arac = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 1.6, 6), matArac);
+    arac.position.set(px + 0.14, 0.8, pz); scene.add(arac);
 
-    // ── Tulpină principală (3 segmente cu ușoară deviație) ──
-    const segH = [0.38, 0.35, 0.30];
-    const deviații = [[0.0,0.0],[0.04,-0.03],[-0.03,0.05]];
+    // Ghiveci
+    const ghiveci = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.28, 10), matGhiveci);
+    ghiveci.position.set(px, 0.14, pz); ghiveci.castShadow = true; scene.add(ghiveci);
+    const pamant = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.04, 10), matPamant);
+    pamant.position.set(px, 0.27, pz); scene.add(pamant);
+
+    // Mulci
+    const mulci = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 12),
+      new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 1.0 }));
+    mulci.position.set(px, 0.015, pz); scene.add(mulci);
+
+    // Tulpină
+    const segH = [0.38, 0.35, 0.32];
+    const dev   = [[0.0,0.0],[0.03,-0.03],[-0.02,0.04]];
     let baseY = 0.28;
     for (let i = 0; i < 3; i++) {
       const seg = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.03 - i*0.005, 0.04 - i*0.004, segH[i], 7),
-        matTulpina
-      );
-      seg.position.set(px + deviații[i][0], baseY + segH[i]/2, pz + deviații[i][1]);
-      seg.castShadow = true;
-      scene.add(seg);
+        new THREE.CylinderGeometry(0.028 - i*0.005, 0.038 - i*0.004, segH[i], 7), matTulpina);
+      seg.position.set(px + dev[i][0], baseY + segH[i]/2, pz + dev[i][1]);
+      seg.castShadow = true; scene.add(seg);
       baseY += segH[i];
     }
-    const topY = baseY; // ~1.31
+    const topY = baseY;
 
-    // ── Ramuri laterale ──
+    // Ramuri
     const ramuri = [
-      { h: 0.55, angle: 0.55,  side:  1, upY: 0.28 + 0.38*0.7 },
-      { h: 0.50, angle: -0.45, side: -1, upY: 0.28 + 0.38 + 0.35*0.5 },
-      { h: 0.45, angle: 0.30,  side:  1, upY: 0.28 + 0.38 + 0.35 + 0.30*0.4 },
+      { h: 0.55, angle: 0.6,  side:  1, upY: 0.28 + 0.38*0.7 },
+      { h: 0.50, angle:-0.5,  side: -1, upY: 0.28 + 0.38 + 0.35*0.5 },
+      { h: 0.42, angle: 0.3,  side:  1, upY: 0.28 + 0.38 + 0.35 + 0.32*0.4 },
     ];
-
     ramuri.forEach(({ h, angle, side, upY }) => {
-      // tulpina ramurii
-      const ram = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.018, 0.025, h, 6),
-        matTulpina
-      );
-      ram.position.set(px + side * h/2 * Math.cos(angle),
-                       upY + h * 0.3,
-                       pz + side * h/2 * Math.sin(angle));
-      ram.rotation.z = -side * 0.55;
-      ram.castShadow = true;
-      scene.add(ram);
-
-      const tipX = px + side * h * Math.cos(angle) * 0.9;
-      const tipY = upY + h * 0.55;
-      const tipZ = pz + side * h * Math.sin(angle) * 0.9;
-
-      // Frunze la capătul ramurii
-      addLeaf(null, tipX,          tipY + 0.05, tipZ,          angle,           0.3);
-      addLeaf(null, tipX + 0.12,   tipY + 0.10, tipZ - 0.05,   angle + 1.0,     0.4);
-      addLeaf(null, tipX - 0.10,   tipY + 0.08, tipZ + 0.06,   angle - 0.8,    -0.35);
-
-      // Roșii pe ramură (1-3 bucăți)
+      const ram = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.022, h, 6), matTulpina);
+      ram.position.set(px + side*h/2*Math.cos(angle), upY + h*0.28, pz + side*h/2*Math.sin(angle));
+      ram.rotation.z = -side * 0.58; ram.castShadow = true; scene.add(ram);
+      const tipX = px + side*h*Math.cos(angle)*0.88;
+      const tipY = upY + h*0.52;
+      const tipZ = pz + side*h*Math.sin(angle)*0.88;
+      addLeaf(tipX,       tipY+0.06, tipZ,        angle,      0.3);
+      addLeaf(tipX+0.11,  tipY+0.10, tipZ-0.06,   angle+1.0,  0.4);
+      addLeaf(tipX-0.09,  tipY+0.08, tipZ+0.07,   angle-0.8, -0.35);
       const nrRosii = 1 + Math.floor(Math.random() * 3);
       for (let t = 0; t < nrRosii; t++) {
-        const ripe = Math.random() > 0.4;
-        addTomato(
-          tipX + (Math.random()-0.5)*0.18,
-          tipY - 0.05 + t * 0.12,
-          tipZ + (Math.random()-0.5)*0.18,
-          ripe
-        );
+        addTomato(tipX+(Math.random()-0.5)*0.16, tipY-0.06+t*0.11,
+                  tipZ+(Math.random()-0.5)*0.16, Math.random()>0.4);
       }
     });
 
-    // ── Frunze sus pe tulpina principală ──
     for (let i = 0; i < 4; i++) {
-      const ang = (i / 4) * Math.PI * 2;
-      addLeaf(null,
-        px + Math.cos(ang) * 0.22,
-        topY - 0.1 + i * 0.08,
-        pz + Math.sin(ang) * 0.22,
-        ang, 0.5
-      );
+      const ang = (i/4)*Math.PI*2;
+      addLeaf(px+Math.cos(ang)*0.21, topY-0.08+i*0.08, pz+Math.sin(ang)*0.21, ang, 0.5);
     }
-
-    // ── Ciorchine de roșii în vârf ──
     for (let t = 0; t < 3; t++) {
-      const a = (t / 3) * Math.PI * 2;
-      addTomato(
-        px + Math.cos(a) * 0.15,
-        topY + 0.05 + t * 0.10,
-        pz + Math.sin(a) * 0.15,
-        t < 2
-      );
+      const a = (t/3)*Math.PI*2;
+      addTomato(px+Math.cos(a)*0.14, topY+0.04+t*0.10, pz+Math.sin(a)*0.14, t<2);
     }
   }
 
@@ -277,56 +384,31 @@
     ([x,z]) => addTomatoPlant(x, z)
   );
 
-  // ─── LED — BEC SEPARAT ─────────────────────────────────────
-  // Suport metalic
-  const suport = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8),
-    new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 })
-  );
-  suport.position.set(0, 2.95, 0);
-  scene.add(suport);
-
-  // Material bec
-  const ledMat = new THREE.MeshStandardMaterial({
-    color: 0x333333,
-    emissive: 0xfff0aa,
-    emissiveIntensity: 0,
-    roughness: 0.1,
-  });
-
-  // Glob bec — DEFINIT ÎNAINTE de ledLight
-  const ledBulb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 10, 10),
-    ledMat
-  );
-  ledBulb.position.set(0, 2.7, 0);
-  scene.add(ledBulb);
-
-  // Lumina punctuală — raza mică, nu afectează toată sera
-  const ledLight = new THREE.PointLight(0xfff5cc, 0, 4);
-  ledLight.position.copy(ledBulb.position);
-  scene.add(ledLight);
-
-  // ─── POMPĂ (indicator) ─────────────────────────────────────
-  const pompaMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.3, 0.2, 0.3),
-    new THREE.MeshStandardMaterial({ color: 0x1a3a8a, metalness: 0.6 })
-  );
-  pompaMesh.position.set(-2.5, 0.1, 2.5);
-  scene.add(pompaMesh);
+  // ─── POMPĂ ─────────────────────────────────────────────────
+  const pompaMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x1a3a8a, metalness: 0.7, roughness: 0.3 }));
+  pompaMesh.position.set(-2.5, 0.12, 2.5); pompaMesh.castShadow = true; scene.add(pompaMesh);
+  const tub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0x333355, metalness: 0.6 }));
+  tub.position.set(-2.5, 0.45, 2.5); scene.add(tub);
 
   // ─── UPDATE LED ────────────────────────────────────────────
   function updateLED(val) {
     const on = val > 0.5;
     ledMat.emissiveIntensity = on ? 2.0 : 0;
     ledMat.color.set(on ? 0xfff0aa : 0x333333);
-    ledLight.intensity = on ? 3.0 : 0;
+    ledLight.intensity = on ? 2.5 : 0;
+    ledStrips.forEach((s, i) => {
+      s.material.emissiveIntensity = on ? 1.8 : 0;
+      s.material.color.set(on ? 0xfff0aa : 0x333333);
+      ledLights[i].intensity = on ? 1.5 : 0;
+    });
     const el = document.getElementById('led');
     el.textContent = on ? 'ON' : 'OFF';
-    el.style.color = on ? '#ffe080' : '#a0ffb0';
+    el.style.color = on ? '#ffe080' : '#b8ffcc';
   }
 
-  // ─── INFLUXDB FETCH ────────────────────────────────────────
+  // ─── INFLUXDB ──────────────────────────────────────────────
   function parseInfluxCSV(csv) {
     const result = {};
     const lines = csv.split('\n');
@@ -356,16 +438,14 @@
     .then(r => r.text())
     .then(text => {
       const d = parseInfluxCSV(text);
-      console.log('InfluxDB:', d);
-      if (d.temperatura   !== undefined) document.getElementById('temp').textContent  = d.temperatura.toFixed(1)  + '°C';
+      if (d.temperatura   !== undefined) document.getElementById('temp').textContent  = d.temperatura.toFixed(1) + '°C';
       if (d.umiditate_aer !== undefined) document.getElementById('umaer').textContent = d.umiditate_aer.toFixed(0) + '%';
       if (d.umiditate_sol !== undefined) document.getElementById('umsol').textContent = d.umiditate_sol.toFixed(0) + '%';
       if (d.led           !== undefined) updateLED(d.led);
       document.getElementById('status').textContent =
         'actualizat ' + new Date().toLocaleTimeString('ro-RO');
     })
-    .catch(err => {
-      console.error('Fetch error:', err);
+    .catch(() => {
       document.getElementById('status').textContent = 'eroare fetch';
     });
   }
