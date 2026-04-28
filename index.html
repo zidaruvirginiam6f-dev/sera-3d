@@ -142,27 +142,139 @@
     addBox(0.08, 3.2, 0.08, x, 1.5, z, 0x607850);
   });
 
-  // ─── PLANTE ────────────────────────────────────────────────
-  function addPlant(x, z) {
-    addBox(0.3, 0.3, 0.3, x, 0.15, z, 0x8B4513); // ghiveci
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.06, 0.8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x3a7a20 })
+  // ─── PLANTE DE ROȘII ───────────────────────────────────────
+  const matTulpina   = new THREE.MeshStandardMaterial({ color: 0x4a7c30, roughness: 0.9 });
+  const matFrunza    = new THREE.MeshStandardMaterial({ color: 0x2e6e1a, roughness: 0.8, side: THREE.DoubleSide });
+  const matRosie     = new THREE.MeshStandardMaterial({ color: 0xcc2200, roughness: 0.4, metalness: 0.05 });
+  const matRosieVerde= new THREE.MeshStandardMaterial({ color: 0x5a8a20, roughness: 0.5 });
+  const matGhiveci   = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 1.0 });
+  const matPamant    = new THREE.MeshStandardMaterial({ color: 0x3d2b1a, roughness: 1.0 });
+
+  function addLeaf(parent, ox, oy, oz, rotY, rotZ) {
+    // Frunză = elipsoid turtit (box scalat)
+    const geo = new THREE.SphereGeometry(0.18, 6, 4);
+    geo.scale(1, 0.15, 0.55);
+    const leaf = new THREE.Mesh(geo, matFrunza);
+    leaf.position.set(ox, oy, oz);
+    leaf.rotation.y = rotY;
+    leaf.rotation.z = rotZ;
+    leaf.castShadow = true;
+    scene.add(leaf);
+  }
+
+  function addTomato(x, y, z, ripe = true) {
+    const mat = ripe ? matRosie : matRosieVerde;
+    const r = 0.09 + Math.random() * 0.04;
+    const tom = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), mat);
+    tom.position.set(x, y, z);
+    tom.castShadow = true;
+    scene.add(tom);
+    // Calice mic deasupra
+    const caliceMat = new THREE.MeshStandardMaterial({ color: 0x3a6a10 });
+    const calice = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.05, 5), caliceMat);
+    calice.position.set(x, y + r + 0.02, z);
+    scene.add(calice);
+  }
+
+  function addTomatoPlant(px, pz) {
+    // ── Ghiveci ──
+    const ghiveci = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.16, 0.28, 10),
+      matGhiveci
     );
-    stem.position.set(x, 0.7, z);
-    stem.castShadow = true;
-    scene.add(stem);
-    const crown = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 10, 10),
-      new THREE.MeshStandardMaterial({ color: 0x4caf50 })
+    ghiveci.position.set(px, 0.14, pz);
+    scene.add(ghiveci);
+    // Pământ în ghiveci
+    const pamant = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.20, 0.20, 0.04, 10),
+      matPamant
     );
-    crown.position.set(x, 1.2, z);
-    crown.castShadow = true;
-    scene.add(crown);
+    pamant.position.set(px, 0.27, pz);
+    scene.add(pamant);
+
+    // ── Tulpină principală (3 segmente cu ușoară deviație) ──
+    const segH = [0.38, 0.35, 0.30];
+    const deviații = [[0.0,0.0],[0.04,-0.03],[-0.03,0.05]];
+    let baseY = 0.28;
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03 - i*0.005, 0.04 - i*0.004, segH[i], 7),
+        matTulpina
+      );
+      seg.position.set(px + deviații[i][0], baseY + segH[i]/2, pz + deviații[i][1]);
+      seg.castShadow = true;
+      scene.add(seg);
+      baseY += segH[i];
+    }
+    const topY = baseY; // ~1.31
+
+    // ── Ramuri laterale ──
+    const ramuri = [
+      { h: 0.55, angle: 0.55,  side:  1, upY: 0.28 + 0.38*0.7 },
+      { h: 0.50, angle: -0.45, side: -1, upY: 0.28 + 0.38 + 0.35*0.5 },
+      { h: 0.45, angle: 0.30,  side:  1, upY: 0.28 + 0.38 + 0.35 + 0.30*0.4 },
+    ];
+
+    ramuri.forEach(({ h, angle, side, upY }) => {
+      // tulpina ramurii
+      const ram = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.025, h, 6),
+        matTulpina
+      );
+      ram.position.set(px + side * h/2 * Math.cos(angle),
+                       upY + h * 0.3,
+                       pz + side * h/2 * Math.sin(angle));
+      ram.rotation.z = -side * 0.55;
+      ram.castShadow = true;
+      scene.add(ram);
+
+      const tipX = px + side * h * Math.cos(angle) * 0.9;
+      const tipY = upY + h * 0.55;
+      const tipZ = pz + side * h * Math.sin(angle) * 0.9;
+
+      // Frunze la capătul ramurii
+      addLeaf(null, tipX,          tipY + 0.05, tipZ,          angle,           0.3);
+      addLeaf(null, tipX + 0.12,   tipY + 0.10, tipZ - 0.05,   angle + 1.0,     0.4);
+      addLeaf(null, tipX - 0.10,   tipY + 0.08, tipZ + 0.06,   angle - 0.8,    -0.35);
+
+      // Roșii pe ramură (1-3 bucăți)
+      const nrRosii = 1 + Math.floor(Math.random() * 3);
+      for (let t = 0; t < nrRosii; t++) {
+        const ripe = Math.random() > 0.4;
+        addTomato(
+          tipX + (Math.random()-0.5)*0.18,
+          tipY - 0.05 + t * 0.12,
+          tipZ + (Math.random()-0.5)*0.18,
+          ripe
+        );
+      }
+    });
+
+    // ── Frunze sus pe tulpina principală ──
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2;
+      addLeaf(null,
+        px + Math.cos(ang) * 0.22,
+        topY - 0.1 + i * 0.08,
+        pz + Math.sin(ang) * 0.22,
+        ang, 0.5
+      );
+    }
+
+    // ── Ciorchine de roșii în vârf ──
+    for (let t = 0; t < 3; t++) {
+      const a = (t / 3) * Math.PI * 2;
+      addTomato(
+        px + Math.cos(a) * 0.15,
+        topY + 0.05 + t * 0.10,
+        pz + Math.sin(a) * 0.15,
+        t < 2
+      );
+    }
   }
 
   [[-2,1.5],[-2,-1.5],[0,1.5],[0,-1.5],[2,1.5],[2,-1.5]].forEach(
-    ([x,z]) => addPlant(x, z)
+    ([x,z]) => addTomatoPlant(x, z)
   );
 
   // ─── LED — BEC SEPARAT ─────────────────────────────────────
